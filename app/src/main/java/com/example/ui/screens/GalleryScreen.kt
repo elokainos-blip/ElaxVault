@@ -79,6 +79,8 @@ fun GalleryScreen(
                 }
             }
             viewModel.importLocalFile(uri, fileName, fileSize, mimeType)
+            // Auto start the syncing process immediately after selection!
+            viewModel.triggerCloudSync()
         }
     }
 
@@ -194,6 +196,16 @@ fun GalleryScreen(
                 }
             }
         }
+
+        // --- Custom Image & Video Upload Component ---
+        GalleryUploadComponent(
+            viewModel = viewModel,
+            onSelectMedia = {
+                photoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                )
+            }
+        )
 
         // --- 3. Filter Category Chips (All, Images, Videos, Audio) ---
         Row(
@@ -536,5 +548,250 @@ fun ProgressDot() {
                 .size(6.dp)
                 .background(PrimaryCyan, CircleShape)
         )
+    }
+}
+
+@Composable
+fun GalleryUploadComponent(
+    viewModel: MediaViewModel,
+    onSelectMedia: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val allMedia by viewModel.allMedia.collectAsState()
+    val isSyncing by viewModel.syncingState.collectAsState()
+    
+    val pendingCount = allMedia.count { it.syncStatus == "PENDING" }
+    
+    // Animate background pulse outline color if syncing is in progress
+    val infiniteTransition = rememberInfiniteTransition(label = "border_glow")
+    val borderGlowColor by infiniteTransition.animateColor(
+        initialValue = BorderSlate,
+        targetValue = if (isSyncing) PrimaryCyan else BorderSlate,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow_anim"
+    )
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 12.dp)
+            .testTag("gallery_upload_dropzone"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (isSyncing) 1.5.dp else 1.dp,
+            color = borderGlowColor
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onSelectMedia() }
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CloudUpload,
+                        contentDescription = "Upload secure media",
+                        tint = PrimaryCyan,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Secure Ingest Hub",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Backup Photos & Videos directly to Vault",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SoftGray,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                
+                // Pulsing dot indicator
+                if (isSyncing) {
+                    Box(
+                        modifier = Modifier
+                            .background(PrimaryCyan.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(PrimaryCyan, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "ENCRYPTING",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = PrimaryCyan,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 9.sp
+                            )
+                        }
+                    }
+                } else if (pendingCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .background(AccentOrange.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "$pendingCount QUEUED",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentOrange,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 9.sp
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .background(AccentGreen.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "SECURE",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentGreen,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Dashed Area / Tap target area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.05f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = if (isSyncing) PrimaryCyan.copy(alpha = 0.5f) else BorderSlate,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(vertical = 20.dp, horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AddPhotoAlternate,
+                        contentDescription = "Select media button",
+                        tint = if (isSyncing) PrimaryCyan else SoftGray,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Tap here to select Images or Videos",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Real-time AI cataloging & tags generated instantly on selection",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                    )
+                }
+            }
+
+            // Sync indicators / dynamic tracking footer inside the component itself
+            if (isSyncing || pendingCount > 0) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = if (isSyncing) "Securing storage stream..." else "Ready to trigger cloud bank",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isSyncing) PrimaryCyan else SoftGray,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    if (pendingCount > 0 && !isSyncing) {
+                        TextButton(
+                            onClick = { viewModel.triggerCloudSync() },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier
+                                .height(26.dp)
+                                .testTag("upload_sync_now_btn")
+                        ) {
+                            Text(
+                                "Start Syncing Now",
+                                color = PrimaryCyan,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(6.dp))
+                
+                // Continuous progress animator
+                val progressAnim = remember { Animatable(0f) }
+                LaunchedEffect(isSyncing) {
+                    if (isSyncing) {
+                        progressAnim.animateTo(
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1400, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart
+                            )
+                        )
+                    } else {
+                        progressAnim.snapTo(0f)
+                    }
+                }
+                
+                LinearProgressIndicator(
+                    progress = { if (isSyncing) progressAnim.value else 0f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(CircleShape),
+                    color = PrimaryCyan,
+                    trackColor = BorderSlate
+                )
+            }
+        }
     }
 }

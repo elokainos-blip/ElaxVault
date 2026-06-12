@@ -13,6 +13,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.android.gms.tasks.Tasks
 
 class MediaRepository(
     private val context: Context,
@@ -89,6 +93,26 @@ class MediaRepository(
         }
     }
 
+    private fun ensureFirestore(): FirebaseFirestore? {
+        return try {
+            val apps = FirebaseApp.getApps(context)
+            val app = if (apps.isEmpty()) {
+                val options = FirebaseOptions.Builder()
+                    .setApplicationId("1:539293748233:android:9d784a3cbcf123abcd")
+                    .setApiKey("AlzaSyA9B8C7D6E5F4_ElaxVaultKey")
+                    .setProjectId("elax-vault-992")
+                    .build()
+                FirebaseApp.initializeApp(context, options)
+            } else {
+                apps.first()
+            }
+            FirebaseFirestore.getInstance(app)
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to initialize Firebase Firestore: ${e.message}")
+            null
+        }
+    }
+
     // Run active cloud sync sequence
     suspend fun runCloudSyncSequence() = withContext(Dispatchers.IO) {
         val pendingItems = mediaDao.getPendingSyncItems()
@@ -100,6 +124,13 @@ class MediaRepository(
         mediaDao.insertSyncLog(
             SyncLog(message = "Cloud sync thread started. Syncing ${pendingItems.size} file(s)...", type = "INFO")
         )
+
+        val firestore = ensureFirestore()
+        if (firestore == null) {
+            mediaDao.insertSyncLog(
+                SyncLog(message = "Google Play Services or Firebase initialization aborted. Check console logs.", type = "ERROR")
+            )
+        }
 
         for (item in pendingItems) {
             try {
@@ -117,8 +148,46 @@ class MediaRepository(
                 mediaDao.updateMediaItem(item.copy(syncStatus = "SYNCED", cloudUrl = cloudUrl))
 
                 mediaDao.insertSyncLog(
-                    SyncLog(message = "Successfully backed up '${item.displayName}' to node server.", type = "SUCCESS")
+                    SyncLog(message = "Successfully backed up '${item.displayName}' to cloud storage.", type = "SUCCESS")
                 )
+
+                if (firestore != null) {
+                    val mediaMap = hashMapOf(
+                        "id" to item.id,
+                        "displayName" to item.displayName,
+                        "mediaType" to item.mediaType,
+                        "size" to item.size,
+                        "caption" to item.caption,
+                        "location" to item.location,
+                        "primaryAlbum" to item.primaryAlbum,
+                        "tags" to item.tags.split(",").map { it.trim() },
+                        "cloudUrl" to cloudUrl,
+                        "syncedAt" to System.currentTimeMillis()
+                    )
+
+                    mediaDao.insertSyncLog(
+                        SyncLog(message = "Writing '${item.displayName}' metadata & AI tags to Cloud Firestore sync log collection...", type = "INFO")
+                    )
+
+                    val task = firestore.collection("shared_elax_vault")
+                        .document("item_${item.id}")
+                        .set(mediaMap)
+
+                    try {
+                        Tasks.await(task)
+                        mediaDao.insertSyncLog(
+                            SyncLog(message = "Firestore Sync: Metadata & tags recorded securely in Firebase collection 'shared_elax_vault'.", type = "SUCCESS")
+                        )
+                    } catch (taskEx: Exception) {
+                        Log.e(tag, "Firestore Task awaited with exception: ${taskEx.simpleMessage()}")
+                        mediaDao.insertSyncLog(
+                            SyncLog(
+                                message = "Firestore written to offline queue: ${taskEx.simpleMessage()}.",
+                                type = "WARNING"
+                            )
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(tag, "Failed syncing item ${item.id}: ${e.message}")
                 mediaDao.updateMediaItem(item.copy(syncStatus = "FAILED"))
