@@ -1,36 +1,56 @@
-# This is a basic workflow to help you get started with Actions
+name: Build Android APK & Bundle
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
+    name: Build Android Project
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      # Step 1: Check out the repository source code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      # Step 2: Dynamically locate the folder containing the gradlew file
+      - name: Find Gradle Directory
+        id: find_gradle
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          GRADLEW_PATH=$(find . -name "gradlew" -print -quit)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "ERROR: Could not find 'gradlew' wrapper file in this repository!"
+            exit 1
+          fi
+          GRADLE_DIR=$(dirname "$GRADLEW_PATH")
+          echo "Found gradlew in directory: $GRADLE_DIR"
+          echo "dir=$GRADLE_DIR" >> $GITHUB_OUTPUT
+
+      # Step 3: Set up Java Environment
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      # Step 4: Grant execution permissions to gradlew in its dynamic directory
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x "${{ steps.find_gradle.outputs.dir }}/gradlew"
+
+      # Step 5: Compile the app into a Debug APK
+      - name: Assemble Debug APK
+        working-directory: ${{ steps.find_gradle.outputs.dir }}
+        run: ./gradlew assembleDebug
+
+      # Step 6: Locate and Save the generated APK
+      - name: Locate and Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuminaVault-Debug-APK
+          path: "**/build/outputs/apk/debug/*.apk"
+          retention-days: 30
