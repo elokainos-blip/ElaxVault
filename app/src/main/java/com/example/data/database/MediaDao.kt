@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.data.model.MediaItem
 import com.example.data.model.SyncLog
+import com.example.data.model.CustomAlbum
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -45,4 +46,14 @@ interface MediaDao {
 
     @Query("DELETE FROM sync_logs")
     suspend fun clearSyncLogs()
+
+    // Custom Album queries
+    @Query("SELECT * FROM custom_albums ORDER BY timestamp DESC")
+    fun getAllCustomAlbums(): Flow<List<CustomAlbum>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCustomAlbum(album: CustomAlbum)
+
+    @Query("DELETE FROM custom_albums")
+    suspend fun clearCustomAlbums()
 }

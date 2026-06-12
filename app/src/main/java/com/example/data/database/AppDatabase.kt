@@ -6,8 +6,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.data.model.MediaItem
 import com.example.data.model.SyncLog
+import com.example.data.model.CustomAlbum
 
-@Database(entities = [MediaItem::class, SyncLog::class], version = 1, exportSchema = false)
+@Database(entities = [MediaItem::class, SyncLog::class, CustomAlbum::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun mediaDao(): MediaDao
 

@@ -156,7 +156,7 @@ class GeminiService(private val context: Context) {
             // Read image from URI and generate a lightweight base64 thumbnail
             val base64Image = compressAndConvertUriToBase64(uriString) ?: return generateProceduralResult(filename)
             
-            val systemPrompt = "You are Lumina Photo Analyzer. Analyze the provided image and generate metadata including an accurate caption, inferred location or activity context, a single primary album classification (choose strictly from: Nature, Travel, Cuisine, Family, Documents, Art, or Pets), and a list of 5 relevant descriptive tags. Return ONLY a valid JSON object matching this schema: {\"caption\": \"string\", \"location\": \"string\", \"primaryAlbum\": \"string\", \"tags\": \"string (comma-separated)\"}"
+            val systemPrompt = "You are Elax Photo Analyzer. Analyze the provided image and generate metadata including an accurate caption, inferred location or activity context, a single primary album classification (choose strictly from: Nature, Travel, Cuisine, Family, Documents, Art, or Pets), and a list of 5 relevant descriptive tags. Return ONLY a valid JSON object matching this schema: {\"caption\": \"string\", \"location\": \"string\", \"primaryAlbum\": \"string\", \"tags\": \"string (comma-separated)\"}"
             
             val contentPrompt = "Analyze this image and output the JSON metadata according to systemInstructions."
 
@@ -206,6 +206,14 @@ class GeminiService(private val context: Context) {
     private fun generateProceduralResult(filename: String): ImageAnalysisResult {
         val lower = filename.lowercase(Locale.ROOT)
         return when {
+            lower.contains("audio") || lower.contains("voice") || lower.contains("memo") || lower.contains("beat") || lower.contains("lofi") || lower.contains("mp3") || lower.contains("wav") -> {
+                ImageAnalysisResult(
+                    caption = "A high-fidelity stereo audio record containing vocal notes and background rhythms.",
+                    location = "HQ Voice Recorder",
+                    primaryAlbum = "Voice Notes",
+                    tags = "audio, voice, memo, stereo, recording"
+                )
+            }
             lower.contains("beach") || lower.contains("sea") || lower.contains("sunset") || lower.contains("island") -> {
                 proceduralBeaches.random()
             }

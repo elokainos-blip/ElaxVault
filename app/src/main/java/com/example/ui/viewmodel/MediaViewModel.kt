@@ -24,7 +24,9 @@ import kotlinx.coroutines.launch
 enum class AppTab {
     GALLERY,
     ALBUMS,
-    CLOUD_SYNC
+    FEED,
+    CLOUD_SYNC,
+    SETTINGS
 }
 
 class MediaViewModel(application: Application) : AndroidViewModel(application) {
@@ -86,6 +88,7 @@ class MediaViewModel(application: Application) : AndroidViewModel(application) {
             val matchesType = when (filter) {
                 "IMAGE" -> item.mediaType.startsWith("image")
                 "VIDEO" -> item.mediaType.startsWith("video")
+                "AUDIO" -> item.mediaType.startsWith("audio")
                 else -> true
             }
 
@@ -101,17 +104,29 @@ class MediaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Dynamic map of Album details, extracted straight from MediaItem data tables
-    val smartAlbums: StateFlow<List<VisualAlbum>> = allMedia.map { items ->
+    // Dynamic map of Album details, combining AI-attributed and manual custom albums
+    val smartAlbums: StateFlow<List<VisualAlbum>> = combine(allMedia, repository.allCustomAlbums) { items, custom ->
         val grouped = items.groupBy { it.primaryAlbum }
-        grouped.map { (albumName, list) ->
+        val allAlbumNames = (grouped.keys + custom.map { it.name } + "Uncategorized").toSet()
+
+        allAlbumNames.map { albumName ->
+            val list = grouped[albumName] ?: emptyList()
             VisualAlbum(
                 name = albumName,
                 itemCount = list.size,
                 latestCoverUri = list.firstOrNull()?.uri,
-                lastModified = list.map { it.timestamp }.maxOrNull() ?: 0L
+                lastModified = if (list.isEmpty()) {
+                    custom.find { it.name == albumName }?.timestamp ?: 0L
+                } else {
+                    list.map { it.timestamp }.maxOrNull() ?: 0L
+                }
             )
-        }.sortedWith(compareByDescending<VisualAlbum> { it.name == "Uncategorized" }.thenBy { it.name })
+        }.filter {
+            it.name != "Analyzing..." || it.itemCount > 0
+        }.sortedWith(
+            compareByDescending<VisualAlbum> { it.name == "Uncategorized" }
+                .thenBy { it.name }
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Background job for periodic "auto-sync" checking
@@ -120,7 +135,7 @@ class MediaViewModel(application: Application) : AndroidViewModel(application) {
     init {
         // Log startup and begin periodic sync runner
         viewModelScope.launch {
-            repository.addSyncLog("Lumina Storage Vault online. Secure client ready.", "INFO")
+            repository.addSyncLog("Elax Storage Vault online. Secure client ready.", "INFO")
         }
         startSyncDaemon()
     }
@@ -240,6 +255,18 @@ class MediaViewModel(application: Application) : AndroidViewModel(application) {
                     name = "Fluffy Calico Kitten Playtime.jpg",
                     size = 790000,
                     type = "image/jpeg"
+                ),
+                PresetAsset(
+                    url = "https://example.com/audio/cyberpunk_study_beat.mp3",
+                    name = "Lofi Study Beats.mp3",
+                    size = 5240000,
+                    type = "audio/mpeg"
+                ),
+                PresetAsset(
+                    url = "https://example.com/audio/meeting_dictation_notes.wav",
+                    name = "Strategy Sync Voice Memo.wav",
+                    size = 2850000,
+                    type = "audio/wav"
                 )
             )
 
@@ -261,6 +288,22 @@ class MediaViewModel(application: Application) : AndroidViewModel(application) {
             repository.deleteMedia(item)
             if (_focusedMediaItem.value?.id == item.id) {
                 _focusedMediaItem.value = null
+            }
+        }
+    }
+
+    fun createNewAlbum(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            repository.createCustomAlbum(name.trim())
+        }
+    }
+
+    fun moveMediaToAlbum(item: MediaItem, newAlbum: String) {
+        viewModelScope.launch {
+            repository.updateMediaAlbum(item, newAlbum)
+            if (_focusedMediaItem.value?.id == item.id) {
+                _focusedMediaItem.value = item.copy(primaryAlbum = newAlbum)
             }
         }
     }

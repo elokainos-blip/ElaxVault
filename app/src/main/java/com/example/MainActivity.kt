@@ -71,6 +71,27 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Launcher to choose audio file from device storage
+                val directAudioPickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.GetContent()
+                ) { uri ->
+                    if (uri != null) {
+                        var fileName = "audio_${System.currentTimeMillis()}.mp3"
+                        var fileSize = 1048576L
+                        val mimeType = context.contentResolver.getType(uri) ?: "audio/mpeg"
+                        
+                        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                            if (cursor.moveToFirst()) {
+                                if (nameIndex != -1) fileName = cursor.getString(nameIndex)
+                                if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
+                            }
+                        }
+                        viewModel.importLocalFile(uri, fileName, fileSize, mimeType)
+                    }
+                }
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     topBar = {
@@ -85,7 +106,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "LUMINA VAULT",
+                                        text = "ELAX VAULT",
                                         fontWeight = FontWeight.Black,
                                         style = MaterialTheme.typography.titleMedium,
                                         color = TextPrimary
@@ -160,6 +181,26 @@ class MainActivity : ComponentActivity() {
                             )
 
                             NavigationBarItem(
+                                selected = currentTab == AppTab.FEED,
+                                onClick = { viewModel.selectTab(AppTab.FEED) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Feed,
+                                        contentDescription = "Feed Browser"
+                                    )
+                                },
+                                label = { Text("Feed") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = BackgroundDark,
+                                    selectedTextColor = PrimaryCyan,
+                                    indicatorColor = PrimaryCyan,
+                                    unselectedIconColor = Color.Gray,
+                                    unselectedTextColor = Color.Gray
+                                ),
+                                modifier = Modifier.testTag("tab_feed_button")
+                            )
+
+                            NavigationBarItem(
                                 selected = currentTab == AppTab.CLOUD_SYNC,
                                 onClick = { viewModel.selectTab(AppTab.CLOUD_SYNC) },
                                 icon = {
@@ -177,6 +218,26 @@ class MainActivity : ComponentActivity() {
                                     unselectedTextColor = Color.Gray
                                 ),
                                 modifier = Modifier.testTag("tab_sync_button")
+                            )
+
+                            NavigationBarItem(
+                                selected = currentTab == AppTab.SETTINGS,
+                                onClick = { viewModel.selectTab(AppTab.SETTINGS) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Settings"
+                                    )
+                                },
+                                label = { Text("Settings") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = BackgroundDark,
+                                    selectedTextColor = PrimaryCyan,
+                                    indicatorColor = PrimaryCyan,
+                                    unselectedIconColor = Color.Gray,
+                                    unselectedTextColor = Color.Gray
+                                ),
+                                modifier = Modifier.testTag("tab_settings_button")
                             )
                         }
                     },
@@ -211,7 +272,9 @@ class MainActivity : ComponentActivity() {
                             when (tab) {
                                 AppTab.GALLERY -> GalleryScreen(viewModel = viewModel)
                                 AppTab.ALBUMS -> AlbumsScreen(viewModel = viewModel)
+                                AppTab.FEED -> FeedBrowserScreen(viewModel = viewModel)
                                 AppTab.CLOUD_SYNC -> SyncScreen(viewModel = viewModel)
+                                AppTab.SETTINGS -> SettingsScreen(viewModel = viewModel)
                             }
                         }
                     }
@@ -270,6 +333,25 @@ class MainActivity : ComponentActivity() {
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
+                                // Option A2: Open Phone Audio Picker
+                                Button(
+                                    onClick = {
+                                        showImportDialog = false
+                                        directAudioPickerLauncher.launch("audio/*")
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("dialog_import_audio"),
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryCyan, contentColor = BackgroundDark),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Audiotrack, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Choose Audio from Device", fontWeight = FontWeight.Bold)
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
                                 // Option B: Use Presets (Instant onboarding on emulator)
                                 OutlinedButton(
                                     onClick = {
@@ -299,12 +381,18 @@ class MainActivity : ComponentActivity() {
 
                 // --- 2. Slid-up Media Detail Bottom Sheet ---
                 focusedMediaItem?.let { item ->
+                    val albumsList by viewModel.smartAlbums.collectAsState()
+                    val albumNames = albumsList.map { it.name }
                     MediaDetailBottomSheet(
                         item = item,
                         onDismiss = { viewModel.focusMediaItem(null) },
                         onDelete = {
                             viewModel.deleteMediaItem(item)
-                        }
+                        },
+                        onMoveToAlbum = { newAlbum ->
+                            viewModel.moveMediaToAlbum(item, newAlbum)
+                        },
+                        availableAlbums = albumNames
                     )
                 }
             }

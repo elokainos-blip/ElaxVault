@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -9,11 +10,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.core.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +41,8 @@ fun MediaDetailBottomSheet(
     item: MediaItem,
     onDismiss: () -> Unit,
     onDelete: () -> Unit,
+    onMoveToAlbum: (String) -> Unit,
+    availableAlbums: List<String>,
     modifier: Modifier = Modifier
 ) {
     ModalBottomSheet(
@@ -64,12 +68,101 @@ fun MediaDetailBottomSheet(
                     .border(1.dp, BorderSlate, RoundedCornerShape(12.dp))
                     .background(BorderSlate)
             ) {
-                AsyncImage(
-                    model = item.uri,
-                    contentDescription = item.displayName,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                val isAudio = item.mediaType.startsWith("audio")
+                if (isAudio) {
+                    var isPlaying by remember { mutableStateOf(false) }
+                    val infiniteTransition = rememberInfiniteTransition(label = "audio_bars_detail")
+                    val barAnimations = List(18) { index ->
+                        infiniteTransition.animateFloat(
+                            initialValue = 0.2f,
+                            targetValue = if (isPlaying) 1f else 0.2f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(
+                                    durationMillis = 400 + (index * 45) % 400,
+                                    easing = FastOutSlowInEasing
+                                ),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "bar_detail_$index"
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        PrimaryCyan.copy(alpha = 0.22f),
+                                        BackgroundDark
+                                    )
+                                )
+                            )
+                            .testTag("audio_player_container_detail"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Audio Waveform element
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(110.dp)
+                                .padding(horizontal = 24.dp)
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 28.dp)
+                                .testTag("audio_waveform_detail"),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            barAnimations.forEachIndexed { index, animState ->
+                                val heightFract = if (isPlaying) animState.value else {
+                                    when (index % 6) {
+                                        0 -> 0.35f
+                                        1 -> 0.7f
+                                        2 -> 0.9f
+                                        3 -> 0.55f
+                                        4 -> 0.25f
+                                        else -> 0.45f
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight(heightFract)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(
+                                            if (isPlaying) PrimaryCyan
+                                            else Color.Gray.copy(alpha = 0.45f)
+                                        )
+                                )
+                            }
+                        }
+
+                        // Centered Play/Pause Button
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(PrimaryCyan)
+                                .clickable { isPlaying = !isPlaying }
+                                .testTag("audio_play_pause_button_detail"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play",
+                                tint = BackgroundDark,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+                } else {
+                    AsyncImage(
+                        model = item.uri,
+                        contentDescription = item.displayName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
 
                 // Shading bottom gradient to make overlays readable
                 Box(
@@ -139,20 +232,58 @@ fun MediaDetailBottomSheet(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.FolderOpen,
-                            contentDescription = null,
-                            tint = PrimaryCyan,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = item.primaryAlbum,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = PrimaryCyan,
-                            fontWeight = FontWeight.Bold
-                        )
+                    var showDropdown by remember { mutableStateOf(false) }
+
+                    Box {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { showDropdown = true }
+                                .background(PrimaryCyan.copy(alpha = 0.12f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .testTag("change_album_trigger")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = PrimaryCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = item.primaryAlbum,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = PrimaryCyan,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Select album",
+                                tint = PrimaryCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showDropdown,
+                            onDismissRequest = { showDropdown = false },
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(1.dp, BorderSlate, RoundedCornerShape(8.dp))
+                        ) {
+                            availableAlbums.toSet().forEach { albumName ->
+                                DropdownMenuItem(
+                                    text = { Text(albumName, color = TextPrimary) },
+                                    onClick = {
+                                        showDropdown = false
+                                        onMoveToAlbum(albumName)
+                                    },
+                                    modifier = Modifier.testTag("album_select_option_${albumName.lowercase()}")
+                                )
+                            }
+                        }
                     }
                 }
 

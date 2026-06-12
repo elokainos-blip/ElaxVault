@@ -6,6 +6,7 @@ import android.util.Log
 import com.example.data.database.MediaDao
 import com.example.data.model.MediaItem
 import com.example.data.model.SyncLog
+import com.example.data.model.CustomAlbum
 import com.example.data.network.GeminiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -22,6 +23,7 @@ class MediaRepository(
 
     val allMediaItems: Flow<List<MediaItem>> = mediaDao.getAllMediaItems()
     val recentSyncLogs: Flow<List<SyncLog>> = mediaDao.getRecentSyncLogs()
+    val allCustomAlbums: Flow<List<CustomAlbum>> = mediaDao.getAllCustomAlbums()
 
     // Query media items grouped by album
     fun getItemsByAlbum(album: String): Flow<List<MediaItem>> = mediaDao.getMediaItemsByAlbum(album)
@@ -141,8 +143,26 @@ class MediaRepository(
     suspend fun clearVault() = withContext(Dispatchers.IO) {
         mediaDao.clearAllMedia()
         mediaDao.clearSyncLogs()
+        mediaDao.clearCustomAlbums()
         mediaDao.insertSyncLog(
             SyncLog(message = "Full storage wipe completed. Vault is empty.", type = "WARNING")
+        )
+    }
+
+    suspend fun createCustomAlbum(albumName: String) = withContext(Dispatchers.IO) {
+        Log.i(tag, "Creating custom manual album: $albumName")
+        mediaDao.insertCustomAlbum(CustomAlbum(name = albumName))
+        mediaDao.insertSyncLog(
+            SyncLog(message = "Manual album '$albumName' created successfully.", type = "SUCCESS")
+        )
+    }
+
+    suspend fun updateMediaAlbum(item: MediaItem, newAlbum: String) = withContext(Dispatchers.IO) {
+        Log.i(tag, "Moving ${item.displayName} to album $newAlbum")
+        val updated = item.copy(primaryAlbum = newAlbum)
+        mediaDao.updateMediaItem(updated)
+        mediaDao.insertSyncLog(
+            SyncLog(message = "Organized '${item.displayName}' into album '$newAlbum'.", type = "INFO")
         )
     }
 

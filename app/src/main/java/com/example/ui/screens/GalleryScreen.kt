@@ -195,7 +195,7 @@ fun GalleryScreen(
             }
         }
 
-        // --- 3. Filter Category Chips (All, Images, Videos) ---
+        // --- 3. Filter Category Chips (All, Images, Videos, Audio) ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -204,7 +204,7 @@ fun GalleryScreen(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            listOf("ALL" to "All Media", "IMAGE" to "Images", "VIDEO" to "Videos").forEach { (key, label) ->
+            listOf("ALL" to "All Media", "IMAGE" to "Images", "VIDEO" to "Videos", "AUDIO" to "Audio").forEach { (key, label) ->
                 val isSelected = filterType == key
                 SuggestionChip(
                     onClick = { viewModel.setFilterMediaType(key) },
@@ -363,13 +363,45 @@ fun GalleryGridItem(
             .background(BorderSlate)
             .clickable(onClick = onClick)
     ) {
-        // Thumbnail Image
-        AsyncImage(
-            model = item.uri,
-            contentDescription = item.displayName,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
+        val isAudio = item.mediaType.startsWith("audio")
+
+        if (isAudio) {
+            // Elegant placeholder pattern for Audio files
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(BackgroundDark, MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Audiotrack,
+                        contentDescription = "Audio track",
+                        tint = PrimaryCyan,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "AUDIO",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = SoftGray,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        } else {
+            // Thumbnail Image
+            AsyncImage(
+                model = item.uri,
+                contentDescription = item.displayName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Shading bottom gradient to make overlays readable
         Box(

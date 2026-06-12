@@ -12,9 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +35,84 @@ fun AlbumsScreen(
     modifier: Modifier = Modifier
 ) {
     val albums by viewModel.smartAlbums.collectAsState()
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var albumNameInput by remember { mutableStateOf("") }
+
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showCreateDialog = false
+                albumNameInput = ""
+            },
+            title = {
+                Text(
+                    text = "Create Manual Album",
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Provide a title for your custom photo locker. You can manually assign any media to this album.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    OutlinedTextField(
+                        value = albumNameInput,
+                        onValueChange = { albumNameInput = it },
+                        placeholder = { Text("e.g. Vacation 2026") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PrimaryCyan,
+                            unfocusedBorderColor = BorderSlate,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedPlaceholderColor = SoftGray,
+                            unfocusedPlaceholderColor = SoftGray
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("new_album_name_input")
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (albumNameInput.isNotBlank()) {
+                            viewModel.createNewAlbum(albumNameInput)
+                            showCreateDialog = false
+                            albumNameInput = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryCyan,
+                        contentColor = BackgroundDark
+                    ),
+                    enabled = albumNameInput.isNotBlank(),
+                    modifier = Modifier.testTag("create_album_submit_button")
+                ) {
+                    Text("Create")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        showCreateDialog = false 
+                        albumNameInput = ""
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Gray)
+                ) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.testTag("new_album_modal")
+        )
+    }
 
     Column(
         modifier = modifier
@@ -86,6 +162,46 @@ fun AlbumsScreen(
                         color = TextSecondary
                     )
                 }
+            }
+        }
+
+        // --- 1.5. Folder list Header & Creation Button ---
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Library Folders",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            Button(
+                onClick = { showCreateDialog = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PrimaryCyan,
+                    contentColor = BackgroundDark
+                ),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .height(36.dp)
+                    .testTag("create_new_album_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FolderOpen,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "New Album",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 

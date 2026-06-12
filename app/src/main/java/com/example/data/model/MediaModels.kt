@@ -30,3 +30,9 @@ data class SyncLog(
     val message: String,
     val type: String // INFO, SUCCESS, WARNING, ERROR
 )
+
+@Entity(tableName = "custom_albums")
+data class CustomAlbum(
+    @PrimaryKey val name: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
