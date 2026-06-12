@@ -1,0 +1,5 @@
+// Set the root project name for your app build
+rootProject.name = "ElaxVault"
+
+// Tell the build engine to include your application module folder
+include ':app'
