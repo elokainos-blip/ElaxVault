@@ -1,0 +1,6 @@
+{
+  "name": "Smart Media Organizer",
+  "description": "Organize personal images & videos automatically with AI-tagging and secure cloud synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
